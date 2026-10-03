@@ -15,12 +15,17 @@ export interface ProviderCompletion {
 export class ProviderError extends Error {
   readonly status?: number;
   readonly retryable: boolean;
+  readonly retryAfterMs?: number;
 
-  constructor(message: string, options: { status?: number; retryable: boolean }) {
+  constructor(
+    message: string,
+    options: { status?: number; retryable: boolean; retryAfterMs?: number },
+  ) {
     super(message);
     this.name = "ProviderError";
     this.status = options.status;
     this.retryable = options.retryable;
+    this.retryAfterMs = options.retryAfterMs;
   }
 }
 
@@ -30,9 +35,20 @@ interface MistralResponse {
   usage?: { prompt_tokens?: number; completion_tokens?: number };
 }
 
-const RETRYABLE_STATUS = new Set([408, 425, 429, 500, 502, 503, 504]);
+const RETRYABLE_STATUS = new Set([408, 425, 500, 502, 503, 504]);
 const MAX_ATTEMPTS = 2;
 const RETRY_DELAY_MS = 400;
+const MAX_RETRY_AFTER_MS = 3_000;
+
+export function parseRetryAfter(header: string | null, now = Date.now()): number | null {
+  if (!header) return null;
+
+  const seconds = Number(header);
+  const waitMs = Number.isFinite(seconds) ? seconds * 1000 : Date.parse(header) - now;
+
+  if (!Number.isFinite(waitMs) || waitMs < 0 || waitMs > MAX_RETRY_AFTER_MS) return null;
+  return waitMs;
+}
 
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -64,9 +80,13 @@ async function requestCompletion(messages: ProviderMessage[]): Promise<ProviderC
 
   if (!response.ok) {
     const body = await response.text().catch(() => "");
+    const retryAfterMs = parseRetryAfter(response.headers.get("retry-after"));
+    const retryable =
+      response.status === 429 ? retryAfterMs !== null : RETRYABLE_STATUS.has(response.status);
+
     throw new ProviderError(
       `Mistral responded with ${response.status}: ${body.slice(0, 200)}`,
-      { status: response.status, retryable: RETRYABLE_STATUS.has(response.status) },
+      { status: response.status, retryable, ...(retryAfterMs === null ? {} : { retryAfterMs }) },
     );
   }
 
@@ -99,7 +119,7 @@ export async function createChatCompletion(
         : new ProviderError("Unexpected provider failure", { retryable: false });
 
       if (!lastError.retryable || attempt === MAX_ATTEMPTS) break;
-      await delay(RETRY_DELAY_MS * attempt);
+      await delay(lastError.retryAfterMs ?? RETRY_DELAY_MS * attempt);
     }
   }
 
