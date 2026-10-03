@@ -173,7 +173,9 @@ Everything model-related lives in `backend/src/modules/ai/`:
 | Provider error or timeout (after the retry) | Logged as `provider_error`, the planner answers, and the reply says the assistant is degraded |
 | Response is not valid JSON or fails validation | Logged as `parse_error` with the raw text truncated, the planner answers |
 
-The rule-based planner resolves relative dates ("tomorrow", "next Tuesday"), meridiem and 24-hour times, emails, names and a service phrase, then asks for at most two missing details per reply. It is also the reason the project can be reviewed without an API key.
+The rule-based planner first classifies the message, and only extracts when it is actually a booking. A question such as "how much does a cleaning cost?" is answered as a question rather than quietly banking `service: Cleaning`, so an off-topic message cannot pollute the draft; an explicit booking verb still wins, so "can you book me a cleaning tomorrow at 2pm?" books. Opening-hours questions are answered from the business row, and availability questions say plainly that slots cannot be listed, since the planner has no calendar data. When the message is a booking it resolves relative dates ("tomorrow", "next Tuesday"), meridiem and 24-hour times, emails, names and a service phrase, then asks for at most two missing details per reply. It is also the reason the project can be reviewed without an API key.
+
+Smalltalk, pricing and availability answers are outside what the brief asks the AI to do; the classifier exists so that the required job, extracting booking details, is not done wrongly on input that was never a booking.
 
 Beyond those, the product-level fallback is the structured form: after three user turns with details still missing, the turn comes back with `needsForm: true` and the UI opens the booking form prefilled from the draft.
 

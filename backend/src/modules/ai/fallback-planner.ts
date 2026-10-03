@@ -2,8 +2,14 @@ import { resolveRelativeDate, resolveTimeExpression } from "../../utils/datetime
 import { mergeFields, missingFields, sanitiseFields } from "./booking-fields";
 import type { AssistantPlan, BookingFieldName, BookingFields, PlanRequest } from "./ai.types";
 
-const BOOKING_SIGNALS =
-  /\b(book|booking|appointment|schedule|reschedule|slot|availability|available|reserve|meet)\b/i;
+const BOOKING_ACTION = /\b(book|booked|booking|schedule|reschedule|reserve|rebook|move it|change it)\b/i;
+const QUESTION_SHAPE =
+  /\?|^\s*(what|when|where|which|who|how|do|does|did|are|is|can|could|would|will|should)\b/i;
+const AVAILABILITY_TOPIC = /\b(available|availability|free|slots?|openings?|spaces?)\b/i;
+const HOURS_TOPIC = /\b(open|opening|closing|close|hours|weekend|holiday)\b/i;
+const PRICE_TOPIC = /\b(cost|costs|price|pricing|charge|charges|fee|fees|how much)\b/i;
+const GREETING = /^\s*(hi|hiya|hello|hey|yo|greetings|good\s+(morning|afternoon|evening))\b/i;
+const THANKS = /\b(thanks|thank you|cheers|appreciate it)\b/i;
 
 const SERVICE_KEYWORDS = [
   "consultation",
@@ -125,35 +131,93 @@ function buildReply(fields: BookingFields, missing: BookingFieldName[]): string 
   return `${acknowledgement} Could you tell me ${question}?`;
 }
 
+type MessageKind =
+  | "booking"
+  | "availability"
+  | "hours"
+  | "price"
+  | "question"
+  | "greeting"
+  | "thanks"
+  | "other";
+
+export function classifyMessage(message: string): MessageKind {
+  if (BOOKING_ACTION.test(message)) return "booking";
+
+  if (QUESTION_SHAPE.test(message)) {
+    if (AVAILABILITY_TOPIC.test(message)) return "availability";
+    if (HOURS_TOPIC.test(message)) return "hours";
+    if (PRICE_TOPIC.test(message)) return "price";
+    return "question";
+  }
+
+  if (GREETING.test(message)) return "greeting";
+  if (THANKS.test(message)) return "thanks";
+  return "other";
+}
+
+function openingHoursLabel(request: PlanRequest): string {
+  const pad = (hour: number) => String(hour).padStart(2, "0");
+  return `${pad(request.openingHour)}:00 to ${pad(request.closingHour)}:00 UTC`;
+}
+
+function answerWithoutBooking(kind: MessageKind, request: PlanRequest): string {
+  const hours = openingHoursLabel(request);
+
+  switch (kind) {
+    case "availability":
+      return `I cannot list open slots here, but tell me a day and time and I will check whether it is free. We are open ${hours}.`;
+    case "hours":
+      return `We are open ${hours}, in ${request.slotMinutes}-minute appointments.`;
+    case "price":
+      return `I do not have pricing to hand, I only arrange appointments. Tell me what you need and when, and I will book it.`;
+    case "greeting":
+      return `Hello. I book appointments for ${request.businessName}. What do you need, and when suits you?`;
+    case "thanks":
+      return "You are welcome. Anything else you would like to book?";
+    default:
+      return `I arrange appointments for ${request.businessName}, open ${hours}. Tell me what you need and when.`;
+  }
+}
+
 export function buildFallbackPlan(request: PlanRequest, now = new Date()): AssistantPlan {
-  const extracted = extractFromMessage(request.message, now);
   const identity = sanitiseFields(
     { customerName: request.defaultName, customerEmail: request.defaultEmail },
     now,
   );
+  const carried = mergeFields(identity, request.draft);
+  const kind = classifyMessage(request.message);
 
-  const fields = mergeFields(
-    mergeFields(identity, request.draft),
-    extracted,
-  );
-
-  const missing = missingFields(fields);
-  const looksLikeBooking =
-    BOOKING_SIGNALS.test(request.message) ||
-    Boolean(extracted.date ?? extracted.time ?? extracted.service) ||
-    request.draft.service !== null;
-
-  if (!looksLikeBooking) {
+  if (kind !== "booking" && kind !== "other") {
     return {
-      reply:
-        "I can help you book an appointment. Tell me what you need and a date and time that suit you.",
-      intent: "smalltalk",
-      fields,
-      missingFields: missing,
+      reply: answerWithoutBooking(kind, request),
+      intent: kind === "greeting" || kind === "thanks" ? "smalltalk" : "ask_question",
+      fields: carried,
+      missingFields: missingFields(carried),
       complete: false,
       source: "fallback",
     };
   }
+
+  const extracted = extractFromMessage(request.message, now);
+  const addsDetail = Boolean(
+    extracted.service ?? extracted.date ?? extracted.time ?? extracted.customerEmail,
+  );
+  const bookingInProgress = Boolean(carried.service ?? carried.date ?? carried.time);
+
+  if (kind === "other" && !addsDetail && !bookingInProgress) {
+    return {
+      reply: answerWithoutBooking("other", request),
+      intent: "smalltalk",
+      fields: carried,
+      missingFields: missingFields(carried),
+      complete: false,
+      source: "fallback",
+    };
+  }
+
+  const fields = mergeFields(carried, extracted);
+  const missing = missingFields(fields);
 
   return {
     reply: buildReply(fields, missing),

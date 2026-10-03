@@ -74,7 +74,82 @@ describe("buildFallbackPlan", () => {
   it("stays out of the booking flow for unrelated chat", () => {
     const plan = buildFallbackPlan(request({ message: "who are you?" }), NOW);
 
-    expect(plan.intent).toBe("smalltalk");
+    expect(plan.intent).not.toBe("book_appointment");
     expect(plan.complete).toBe(false);
+    expect(plan.fields.service).toBeNull();
+    expect(plan.fields.date).toBeNull();
+    expect(plan.fields.time).toBeNull();
+  });
+});
+
+describe("non-booking messages", () => {
+  it("does not capture a service from a price question", () => {
+    const plan = buildFallbackPlan(
+      request({ message: "how much does a cleaning cost?" }),
+      NOW,
+    );
+
+    expect(plan.intent).toBe("ask_question");
+    expect(plan.fields.service).toBeNull();
+    expect(plan.reply).toContain("pricing");
+  });
+
+  it("does not capture a date from an availability question", () => {
+    const plan = buildFallbackPlan(
+      request({ message: "what times are available tomorrow?" }),
+      NOW,
+    );
+
+    expect(plan.intent).toBe("ask_question");
+    expect(plan.fields.date).toBeNull();
+    expect(plan.reply).toContain("check whether it is free");
+  });
+
+  it("answers an opening hours question from the business config", () => {
+    const plan = buildFallbackPlan(request({ message: "are you open on Sunday?" }), NOW);
+
+    expect(plan.intent).toBe("ask_question");
+    expect(plan.reply).toContain("09:00 to 17:00 UTC");
+    expect(plan.fields.date).toBeNull();
+  });
+
+  it("greets by name without starting a booking", () => {
+    const plan = buildFallbackPlan(request({ message: "hello" }), NOW);
+
+    expect(plan.intent).toBe("smalltalk");
+    expect(plan.reply).toContain("Carter Clinic");
+    expect(plan.fields.service).toBeNull();
+  });
+
+  it("acknowledges thanks instead of repeating the booking prompt", () => {
+    const plan = buildFallbackPlan(request({ message: "thanks!" }), NOW);
+
+    expect(plan.intent).toBe("smalltalk");
+    expect(plan.reply).toContain("welcome");
+  });
+
+  it("still books when a question contains an explicit booking verb", () => {
+    const plan = buildFallbackPlan(
+      request({ message: "can you book me a cleaning tomorrow at 2pm?" }),
+      NOW,
+    );
+
+    expect(plan.intent).toBe("book_appointment");
+    expect(plan.fields.service).toBe("Cleaning");
+    expect(plan.fields.time).toBe("14:00");
+  });
+
+  it("continues an in-progress booking from a bare detail", () => {
+    const plan = buildFallbackPlan(
+      request({
+        message: "actually make it 10am",
+        draft: { ...EMPTY_BOOKING_FIELDS, service: "Cleaning", date: "2026-03-11" },
+      }),
+      NOW,
+    );
+
+    expect(plan.intent).toBe("book_appointment");
+    expect(plan.fields.time).toBe("10:00");
+    expect(plan.fields.service).toBe("Cleaning");
   });
 });
