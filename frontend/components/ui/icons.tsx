@@ -50,6 +50,25 @@ export function SparkIcon(props: SVGProps<SVGSVGElement>) {
   );
 }
 
+export function EyeIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <Icon {...props}>
+      <path d="M1.8 10S4.9 4.5 10 4.5 18.2 10 18.2 10 15.1 15.5 10 15.5 1.8 10 1.8 10Z" />
+      <circle cx="10" cy="10" r="2.4" />
+    </Icon>
+  );
+}
+
+export function EyeOffIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <Icon {...props}>
+      <path d="M8.1 5A6.7 6.7 0 0 1 10 4.5c5.1 0 8.2 5.5 8.2 5.5a16 16 0 0 1-2.5 3.2M5.1 6.3A15.6 15.6 0 0 0 1.8 10S4.9 15.5 10 15.5a7 7 0 0 0 2.8-.6" />
+      <path d="m8.3 8.3a2.4 2.4 0 0 0 3.4 3.4" />
+      <path d="M3 3l14 14" />
+    </Icon>
+  );
+}
+
 export function RefreshIcon(props: SVGProps<SVGSVGElement>) {
   return (
     <Icon {...props}>

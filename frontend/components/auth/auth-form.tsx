@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import { Field, TextInput } from "@/components/ui/field";
+import { Field, PasswordInput, TextInput } from "@/components/ui/field";
 import { ApiError } from "@/lib/api-client";
 import { useAuth } from "@/lib/auth-context";
 
@@ -131,9 +131,8 @@ export function AuthForm({ mode }: AuthFormProps) {
           error={errors.password}
           hint={isSignup ? "At least 8 characters with upper, lower and a number" : undefined}
         >
-          <TextInput
+          <PasswordInput
             id="password"
-            type="password"
             autoComplete={isSignup ? "new-password" : "current-password"}
             value={password}
             invalid={Boolean(errors.password)}
