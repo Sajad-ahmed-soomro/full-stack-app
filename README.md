@@ -2,12 +2,19 @@
 
 An appointment-booking SaaS prototype where customers book by chatting with an AI assistant. A Next.js frontend talks to an Express API over REST and Socket.IO; the API extracts booking details from the conversation with Mistral, validates them against the business rules, and writes appointments to PostgreSQL.
 
-Demo account after seeding: **demo@schedulr.test / Password123!**
+## Live demo
 
-- Frontend: `http://localhost:3000`
-- API: `http://localhost:4000` (`GET /health`, `GET /api` lists the routes)
+| | |
+| --- | --- |
+| Application | **https://frontend-seven-smoky-45.vercel.app** |
+| API | https://full-stack-app-esp3.onrender.com (`/health`, `/api` lists the routes) |
+| Demo account | **demo@schedulr.test** / **Password123!** (the sign-in screen has a button that fills it in) |
+
+Both services are on free tiers that sleep when idle, so the first request after a quiet period takes up to a minute while the API and database wake. A refresh is enough.
+
 - API reference: [`docs/api.md`](./docs/api.md)
 - Database design: [`database/README.md`](./database/README.md)
+- Running locally: [below](#running-locally)
 
 ## What it does
 
@@ -247,15 +254,29 @@ Limitations:
 
 ## Deployment
 
-Nothing is deployed from this repository yet; these are the paths it is set up for.
+The live demo runs on three free tiers:
 
-**Frontend on Vercel.** Import the repo, set the root directory to `frontend`, and set `NEXT_PUBLIC_API_URL` to the API's public URL. `output: "standalone"` is already configured, so a container host works too.
+| Piece | Host | Notes |
+| --- | --- | --- |
+| Frontend | Vercel | Root directory `frontend`, `NEXT_PUBLIC_API_URL` set to the API origin. Baked in at build time, so changing the API URL needs a redeploy |
+| API | Render (Docker) | Builds the root [`Dockerfile`](./Dockerfile); the container runs `scripts/migrate.mjs` before the server, so a fresh database migrates itself |
+| PostgreSQL | Neon | Pooled connection string, `DATABASE_SSL=true` |
 
-**API and database on Render.** [`render.yaml`](./render.yaml) is a blueprint that provisions a free PostgreSQL instance and the API, wires `DATABASE_URL` from the database, generates `JWT_SECRET`, and runs the migration before start. Set `CORS_ORIGINS` to the frontend's URL and `MISTRAL_API_KEY` in the dashboard. Railway or Fly.io work the same way: build `backend`, run `node scripts/migrate.mjs && node dist/server.js`, set `DATABASE_SSL=true`.
+The API needs the WebSocket to stay open, which rules out serverless functions for that half; Vercel serves the frontend and Render runs a persistent Node process.
 
-**Containers.** `docker compose up --build` runs all three locally; `Dockerfile` (the API, built from the repo root so it can read `database/`) and `frontend/Dockerfile` are multi-stage and production-ready for any container host.
+Environment variables on the API host: `DATABASE_URL`, `DATABASE_SSL=true`, `JWT_SECRET` (32+ characters), `MISTRAL_API_KEY`, and `CORS_ORIGINS` set to the exact frontend origin. `NODE_ENV` and `PORT` come from the image and the platform.
 
-After deploying, check `GET /health` and confirm `aiProvider` reports `mistral` rather than `rule-based-fallback`.
+[`render.yaml`](./render.yaml) describes the same stack as a blueprint for Render's own PostgreSQL, if you would rather not use Neon. Railway and Fly.io work the same way: build from the root `Dockerfile`, set `DATABASE_SSL=true`.
+
+**Containers.** `docker compose up --build` runs all three locally. The root `Dockerfile` builds from the repo root so it can copy both `backend/` and `database/`; `frontend/Dockerfile` is multi-stage with `output: "standalone"`.
+
+After deploying, `GET /health` reports whether the database is reachable and whether the AI provider is configured:
+
+```json
+{"status":"ok","aiProvider":"mistral","checks":{"database":"ok"}}
+```
+
+`aiProvider: "rule-based-fallback"` means no API key is set. Note that the check runs `SELECT 1`, so it proves connectivity rather than schema — a fresh database that has not migrated still reports `ok` while every query fails.
 
 ## Repository layout
 
