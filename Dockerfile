@@ -16,4 +16,4 @@ COPY --from=build /app/dist ./dist
 COPY backend/scripts ./scripts
 COPY database /database
 EXPOSE 4000
-CMD ["node", "dist/server.js"]
+CMD ["sh", "-c", "node scripts/migrate.mjs && node dist/server.js"]
