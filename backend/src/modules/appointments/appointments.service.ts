@@ -156,7 +156,7 @@ export async function createAppointment(
       durationMinutes: input.durationMinutes,
       notes: input.notes ?? null,
     },
-    input.chatSessionId ? "chat" : "form",
+    "form",
     input.chatSessionId ?? null,
   );
   return repository.toAppointment(row);

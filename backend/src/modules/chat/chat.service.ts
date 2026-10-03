@@ -78,20 +78,29 @@ export async function openSession(
     getBusinessOrFail(user.businessId),
   ]);
 
-  const created = await repository.createSession(
+  const { session, created } = await repository.createSession(
     user.businessId,
     user.id,
     seedDraft(identity),
   );
+
+  if (!created) {
+    const messages = await repository.listMessages(session.id, { limit: 100 });
+    return {
+      session: repository.toSession(session),
+      messages: messages.map(repository.toMessage),
+    };
+  }
+
   const greeting = await repository.appendMessage(
-    created.id,
+    session.id,
     "assistant",
     greetingFor(identity, business),
     { kind: "greeting" },
   );
 
   return {
-    session: repository.toSession(created),
+    session: repository.toSession(session),
     messages: [repository.toMessage(greeting)],
   };
 }
@@ -137,11 +146,13 @@ export async function handleUserMessage(
 ): Promise<ChatTurn> {
   const session = sessionId
     ? await getOwnedSession(user, sessionId)
-    : await repository.createSession(
-        user.businessId,
-        user.id,
-        seedDraft(await loadIdentity(user)),
-      );
+    : (
+        await repository.createSession(
+          user.businessId,
+          user.id,
+          seedDraft(await loadIdentity(user)),
+        )
+      ).session;
 
   if (session.status === "closed") {
     throw ApiError.conflict("This conversation is closed, start a new one");

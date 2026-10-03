@@ -25,7 +25,11 @@ export function MessageBubble({ message }: { message: ChatMessage }) {
         <span>{formatMessageTime(message.createdAt)}</span>
         {message.pending && <span>sending</span>}
         {message.failed && <span className="text-rose-500">not sent</span>}
-        {servedByRules && <span className="text-slate-400">offline mode</span>}
+        {servedByRules && (
+          <span className="text-slate-400" title="Answered by the rule-based planner, not the language model">
+            rule-based
+          </span>
+        )}
       </div>
     </div>
   );

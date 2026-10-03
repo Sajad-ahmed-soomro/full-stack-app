@@ -51,7 +51,7 @@ export async function createSession(
   businessId: string,
   userId: string,
   draft: BookingFields,
-): Promise<ChatSessionRow> {
+): Promise<{ session: ChatSessionRow; created: boolean }> {
   const inserted = await queryOne<ChatSessionRow>(
     `INSERT INTO chat_sessions (business_id, user_id, draft)
           VALUES ($1, $2, $3)
@@ -60,13 +60,13 @@ export async function createSession(
     [businessId, userId, JSON.stringify(draft)],
   );
 
-  if (inserted) return inserted;
+  if (inserted) return { session: inserted, created: true };
 
   const existing = await findActiveSession(userId);
   if (!existing) {
     throw new Error("Failed to create or locate an active chat session");
   }
-  return existing;
+  return { session: existing, created: false };
 }
 
 export async function findSessionById(
