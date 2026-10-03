@@ -253,7 +253,7 @@ Nothing is deployed from this repository yet; these are the paths it is set up f
 
 **API and database on Render.** [`render.yaml`](./render.yaml) is a blueprint that provisions a free PostgreSQL instance and the API, wires `DATABASE_URL` from the database, generates `JWT_SECRET`, and runs the migration before start. Set `CORS_ORIGINS` to the frontend's URL and `MISTRAL_API_KEY` in the dashboard. Railway or Fly.io work the same way: build `backend`, run `node scripts/migrate.mjs && node dist/server.js`, set `DATABASE_SSL=true`.
 
-**Containers.** `docker compose up --build` runs all three locally; `backend/Dockerfile` and `frontend/Dockerfile` are multi-stage and production-ready for any container host.
+**Containers.** `docker compose up --build` runs all three locally; `Dockerfile` (the API, built from the repo root so it can read `database/`) and `frontend/Dockerfile` are multi-stage and production-ready for any container host.
 
 After deploying, check `GET /health` and confirm `aiProvider` reports `mistral` rather than `rule-based-fallback`.
 
