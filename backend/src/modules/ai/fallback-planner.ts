@@ -69,6 +69,17 @@ const FILLER_WORDS = new Set([
   "that",
   "with",
   "about",
+  "monday",
+  "tuesday",
+  "wednesday",
+  "thursday",
+  "friday",
+  "saturday",
+  "sunday",
+  "week",
+  "weekend",
+  "noon",
+  "midnight",
 ]);
 
 const EMAIL_IN_TEXT = /[^\s@]+@[^\s@]+\.[a-z]{2,}/i;
@@ -81,7 +92,11 @@ function titleCase(value: string): string {
     .join(" ");
 }
 
-function extractService(message: string): string | null {
+function describesATime(word: string, now: Date): boolean {
+  return resolveRelativeDate(word, now) !== null || resolveTimeExpression(word) !== null;
+}
+
+function extractService(message: string, now: Date): string | null {
   const lower = message.toLowerCase();
 
   const keyword = SERVICE_KEYWORDS.find((entry) => lower.includes(entry));
@@ -93,7 +108,9 @@ function extractService(message: string): string | null {
   const words = phrase[1]
     .replace(/[^a-z\s-]/g, " ")
     .split(/\s+/)
-    .filter((word) => word.length > 2 && !FILLER_WORDS.has(word));
+    .filter(
+      (word) => word.length > 2 && !FILLER_WORDS.has(word) && !describesATime(word, now),
+    );
 
   const candidate = words.slice(0, 3).join(" ");
   return candidate.length >= 3 ? titleCase(candidate) : null;
@@ -104,7 +121,7 @@ function extractFromMessage(message: string, now: Date): BookingFields {
 
   return sanitiseFields(
     {
-      service: extractService(message),
+      service: extractService(message, now),
       date: resolveRelativeDate(message, now),
       time: resolveTimeExpression(message),
       customerName: nameMatch?.[1] ? titleCase(nameMatch[1].trim()) : null,

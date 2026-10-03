@@ -153,3 +153,32 @@ describe("non-booking messages", () => {
     expect(plan.fields.service).toBe("Cleaning");
   });
 });
+
+describe("service extraction guards", () => {
+  it("does not treat a weekday as the service", () => {
+    const plan = buildFallbackPlan(request({ message: "book for Sunday 1:30 pm" }), NOW);
+
+    expect(plan.fields.service).toBeNull();
+    expect(plan.fields.time).toBe("13:30");
+    expect(plan.complete).toBe(false);
+    expect(plan.reply).toContain("what you would like to book");
+  });
+
+  it("does not treat a relative day as the service", () => {
+    const plan = buildFallbackPlan(request({ message: "book for tomorrow at 10am" }), NOW);
+
+    expect(plan.fields.service).toBeNull();
+    expect(plan.fields.date).toBe("2026-03-11");
+    expect(plan.fields.time).toBe("10:00");
+  });
+
+  it("still reads a real service stated alongside a weekday", () => {
+    const plan = buildFallbackPlan(
+      request({ message: "book a cleaning on Sunday at 1:30 pm" }),
+      NOW,
+    );
+
+    expect(plan.fields.service).toBe("Cleaning");
+    expect(plan.fields.time).toBe("13:30");
+  });
+});
